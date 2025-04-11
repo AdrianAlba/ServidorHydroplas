@@ -10,9 +10,15 @@ async def handler(websocket):
     try:
         async for mensaje in websocket:
             print(f"📨 Mensaje recibido: {mensaje}")
-            await asyncio.gather(*[
-                cliente.send(f"📡 {mensaje}") for cliente in clientes_conectados if cliente != websocket
-            ])
+            
+            # Enviar el mismo mensaje de vuelta al cliente que lo envió
+            await websocket.send(f"Echo: {mensaje}")
+
+            # (Opcional) reenviar a los demás clientes
+            # await asyncio.gather(*[
+            #     cliente.send(f"📡 {mensaje}") for cliente in clientes_conectados if cliente != websocket
+            # ])
+            
     except websockets.exceptions.ConnectionClosed:
         print("❌ Cliente desconectado")
     finally:

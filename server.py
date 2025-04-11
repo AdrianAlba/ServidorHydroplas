@@ -2,33 +2,20 @@ import asyncio
 import os
 import websockets
 
-clientes_conectados = set()
-
 async def handler(websocket):
     print("🔌 Cliente conectado")
-    clientes_conectados.add(websocket)
     try:
         async for mensaje in websocket:
             print(f"📨 Mensaje recibido: {mensaje}")
-            
-            # Enviar el mismo mensaje de vuelta al cliente que lo envió
-            await websocket.send(f"Echo: {mensaje}")
-
-            # (Opcional) reenviar a los demás clientes
-            # await asyncio.gather(*[
-            #     cliente.send(f"📡 {mensaje}") for cliente in clientes_conectados if cliente != websocket
-            # ])
-            
+            await websocket.send(f"Echo: {mensaje}")  # Solo responde al cliente que envió
     except websockets.exceptions.ConnectionClosed:
         print("❌ Cliente desconectado")
-    finally:
-        clientes_conectados.remove(websocket)
 
 async def main():
-    puerto = int(os.environ.get("PORT", 10000))  # Para Render o ejecución local
+    puerto = int(os.environ.get("PORT", 10000))  # Render asigna el puerto en $PORT
     async with websockets.serve(handler, "0.0.0.0", puerto):
         print(f"🌐 Servidor WebSocket escuchando en puerto {puerto}")
-        await asyncio.Future()
+        await asyncio.Future()  # Mantiene vivo el servidor
 
 if __name__ == "__main__":
     asyncio.run(main())

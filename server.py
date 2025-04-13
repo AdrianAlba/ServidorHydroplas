@@ -4,26 +4,43 @@ import websockets
 
 clientes_conectados = {}  # websocket -> nombre
 
+# 🔎 Función auxiliar para encontrar el WebSocket de un cliente por nombre
+def buscar_cliente_por_nombre(nombre):
+    for ws, cliente in clientes_conectados.items():
+        if cliente == nombre:
+            return ws
+    return None
+
 async def handler(websocket):
     print("🔌 Cliente conectado")
     
     try:
-        # Recibir el primer mensaje como nombre o tipo de cliente
+        # Recibir el primer mensaje como nombre
         nombre = await websocket.recv()
         clientes_conectados[websocket] = nombre
         print(f"👤 Cliente identificado como: {nombre}")
 
-        # Procesar mensajes posteriores
         async for mensaje in websocket:
             print(f"📨 Mensaje de {nombre}: {mensaje}")
 
-            await websocket.send(f"Echo de {nombre}: {mensaje}")
+            if nombre == "clienteWeb":
+                # 🔁 Redirigir mensaje a hydroplast
+                ws_hydro = buscar_cliente_por_nombre("hydroplast")
+                if ws_hydro:
+                    await ws_hydro.send(mensaje)
+                    print(f"➡️ Reenviado a hydroplast: {mensaje}")
+                else:
+                    await websocket.send("⚠️ hydroplast no está conectado")
 
-            # (Opcional) reenviar a los demás clientes
-            # await asyncio.gather(*[
-            #     cliente.send(f"📡 {nombre} dice: {mensaje}") 
-            #     for cliente in clientes_conectados if cliente != websocket
-            # ])
+            elif nombre == "hydroplast":
+                # ✅ Enviar confirmación al clienteWeb
+                ws_web = buscar_cliente_por_nombre("clienteWeb")
+                if ws_web:
+                    confirmacion = f"echo: {mensaje}"
+                    await ws_web.send(confirmacion)
+                    print(f"✅ Confirmación enviada a clienteWeb: {confirmacion}")
+                else:
+                    await websocket.send("⚠️ clienteWeb no está conectado")
 
     except websockets.exceptions.ConnectionClosed:
         print(f"❌ Cliente {clientes_conectados.get(websocket, 'desconocido')} desconectado")

@@ -27,7 +27,7 @@ async def handler(websocket):
 async def main():
     puerto = int(os.environ.get("PORT", 10000))  # Para Render o ejecución local
     async with websockets.serve(handler, "0.0.0.0", puerto):
-        print(f"🌐 Servidor WebSocket escuchando en puerto {puerto}")
+        print(f"🌐 Servidor escuchando en puerto {puerto}")
         await asyncio.Future()
 
 if __name__ == "__main__":

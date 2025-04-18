@@ -1,8 +1,13 @@
 import asyncio
 import os
 import websockets
+import logging
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('pymongo')
+logger.setLevel(logging.DEBUG)
 
 uri = "mongodb+srv://adrianalba:tukIweCey0ZrOih9@hydroplastdb.rxpa4k9.mongodb.net/?retryWrites=true&w=majority&appName=hydroplastDB"
 

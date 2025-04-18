@@ -1,6 +1,15 @@
 import asyncio
 import os
 import websockets
+import json
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+
+# Configuración MongoDB
+uri = "mongodb+srv://adrianalba:tukIweCey0ZrOih9@hydroplastdb.rxpa4k9.mongodb.net/?retryWrites=true&w=majority&appName=hydroplastDB"
+client = MongoClient(uri, server_api=ServerApi('1'))
+db = client['hydroplastDB']
+coleccion = db['lecturas']
 
 clientes_conectados = {}  # websocket -> nombre
 
@@ -10,6 +19,15 @@ def buscar_cliente_por_nombre(nombre):
         if cliente == nombre:
             return ws
     return None
+
+async def guardar_datos_mongodb(datos):
+    try:
+        resultado = coleccion.insert_one(datos)
+        print(f"📝 Datos guardados en MongoDB con ID: {resultado.inserted_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error al guardar en MongoDB: {e}")
+        return False
 
 async def handler(websocket):
     print("🔌 Cliente conectado")
@@ -33,13 +51,28 @@ async def handler(websocket):
                     await websocket.send("⚠️ hydroplast no está conectado")
 
             elif nombre == "hydroplast":
-                # ✅ Enviar confirmación al clienteWeb
-                ws_web = buscar_cliente_por_nombre("clienteWeb")
-                if ws_web:
-                    await ws_web.send(mensaje)
-                    print(f"✅ Confirmación enviada a clienteWeb: {mensaje}")
-                else:
-                    await websocket.send("⚠️ clienteWeb no está conectado")
+                try:
+                    # Intentar parsear el mensaje como JSON
+                    datos_sensor = json.loads(mensaje)
+                    
+                    # Guardar en MongoDB
+                    guardado = await guardar_datos_mongodb(datos_sensor)
+                    
+                    # Enviar confirmación al clienteWeb
+                    ws_web = buscar_cliente_por_nombre("clienteWeb")
+                    if ws_web:
+                        # Si se guardó correctamente, reenviar los datos
+                        if guardado:
+                            await ws_web.send(mensaje)
+                            print(f"✅ Datos reenviados a clienteWeb y guardados en MongoDB")
+                        else:
+                            await ws_web.send("❌ Error al guardar datos")
+                    else:
+                        await websocket.send("⚠️ clienteWeb no está conectado")
+                
+                except json.JSONDecodeError:
+                    print("❌ Error: El mensaje no es un JSON válido")
+                    await websocket.send("❌ Error: Formato JSON inválido")
 
     except websockets.exceptions.ConnectionClosed:
         print(f"❌ Cliente {clientes_conectados.get(websocket, 'desconocido')} desconectado")
@@ -53,4 +86,11 @@ async def main():
         await asyncio.Future()
 
 if __name__ == "__main__":
+    # Verificar conexión MongoDB
+    try:
+        client.admin.command('ping')
+        print("✅ Conexión exitosa a MongoDB")
+    except Exception as e:
+        print(f"❌ Error conectando a MongoDB: {e}")
+    
     asyncio.run(main())

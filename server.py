@@ -1,24 +1,32 @@
 import asyncio
 import os
 import websockets
-import logging
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('pymongo')
-logger.setLevel(logging.DEBUG)
+import psycopg2
+from datetime import datetime
 
-uri = "mongodb+srv://adrianalba:tukIweCey0ZrOih9@hydroplastdb.rxpa4k9.mongodb.net/?retryWrites=true&w=majority&appName=hydroplastDB"
+conn = psycopg2.connect(
+    host="virginia-postgres.render.com",
+    database="hydroplastdb",
+    user="hydroplastdb_user",
+    password="nPLtrVhiuMDIO1KTIBtQmtSTfO4cJPK9",
+    port=5432
+)
 
-# Create a new client and connect to the server
-client = MongoClient(uri, server_api=ServerApi('1'))
-# Send a ping to confirm a successful connection
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(e)
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS mediciones (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP,
+    temperatura REAL,
+    iluminancia REAL,
+    nivel_agua REAL,
+    led_rojo INTEGER,
+    led_azul INTEGER,
+    bomba_agua INTEGER
+);
+""")
 
 
 clientes_conectados = {}  # websocket -> nombre
@@ -66,29 +74,35 @@ async def handler(websocket):
         clientes_conectados.pop(websocket, None)
 
 async def main():
-
-    # Crear el documento con los datos del sensor
     datos_sensor = {
         "timestamp": "2025-04-18T15:42:10Z",
-        "temperatura": 69,
-        "iluminancia": 810.35,
+        "temperatura": 69.87,
+        "iluminancia": 69.35,
         "nivelAgua": 78.20,
         "ledRojo": 128,
         "ledAzul": 255,
         "bombaAgua": 200
     }
-
-    # Seleccionar la base de datos y colección
-    db = client['hydroplastDB']  # Nombre de la base de datos
-    coleccion = db['lecturas']   # Nombre de la colección
-
-    # Insertar el documento
-    try:
-        resultado = coleccion.insert_one(datos_sensor)
-        print(f"Documento insertado con ID: {resultado.inserted_id}")
-    except Exception as e:
-        print(f"Error al insertar documento: {e}")
     
+    cur.execute("""
+        INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            datetime.fromisoformat(datos_sensor["timestamp"].replace('Z', '+00:00')),
+            datos_sensor["temperatura"],
+            datos_sensor["iluminancia"],
+            datos_sensor["nivelAgua"],
+            datos_sensor["ledRojo"],
+            datos_sensor["ledAzul"],
+            datos_sensor["bombaAgua"]
+    ))
+
+    # 6. Confirmar cambios y cerrar conexión
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print("✔️ Dato insertado correctamente en PostgreSQL.")
 
 
     puerto = int(os.environ.get("PORT", 10000))
@@ -97,10 +111,7 @@ async def main():
         await asyncio.Future()
 
 if __name__ == "__main__":
+
+
+
     asyncio.run(main())
-
-
-
-
-
-

@@ -1,28 +1,36 @@
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
-import certifi
+import psycopg2
+from datetime import datetime
 
-uri = "mongodb+srv://adrianalba:tukIweCey0ZrOih9@hydroplastdb.rxpa4k9.mongodb.net/?retryWrites=true&w=majority&appName=hydroplastDB"
-
-# Create a new client and connect to the server with SSL configuration
-client = MongoClient(
-    uri,
-    server_api=ServerApi('1'),
-    tls=True,
-    tlsCAFile=certifi.where()
+# 1. Conexión a PostgreSQL
+conn = psycopg2.connect(
+    host="virginia-postgres.render.com",
+    database="hydroplastdb",
+    user="hydroplastdb_user",
+    password="nPLtrVhiuMDIO1KTIBtQmtSTfO4cJPK9",
+    port=5432
 )
 
-# Send a ping to confirm a successful connection
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(f"Error de conexión: {e}")
+# 2. Crear cursor
+cur = conn.cursor()
 
-# Crear el documento con los datos del sensor
+# 3. Crear tabla con todos los campos del JSON
+cur.execute("""
+CREATE TABLE IF NOT EXISTS mediciones (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP,
+    temperatura REAL,
+    iluminancia REAL,
+    nivel_agua REAL,
+    led_rojo INTEGER,
+    led_azul INTEGER,
+    bomba_agua INTEGER
+);
+""")
+
+# 4. Datos de ejemplo (usando el JSON proporcionado)
 datos_sensor = {
     "timestamp": "2025-04-18T15:42:10Z",
-    "temperatura": 69,
+    "temperatura": 25.87,
     "iluminancia": 810.35,
     "nivelAgua": 78.20,
     "ledRojo": 128,
@@ -30,13 +38,23 @@ datos_sensor = {
     "bombaAgua": 200
 }
 
-# Seleccionar la base de datos y colección
-db = client['hydroplastDB']  # Nombre de la base de datos
-coleccion = db['lecturas']   # Nombre de la colección
+# 5. Insertar datos
+cur.execute("""
+INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua)
+VALUES (%s, %s, %s, %s, %s, %s, %s)
+""", (
+    datetime.fromisoformat(datos_sensor["timestamp"].replace('Z', '+00:00')),
+    datos_sensor["temperatura"],
+    datos_sensor["iluminancia"],
+    datos_sensor["nivelAgua"],
+    datos_sensor["ledRojo"],
+    datos_sensor["ledAzul"],
+    datos_sensor["bombaAgua"]
+))
 
-# Insertar el documento
-try:
-    resultado = coleccion.insert_one(datos_sensor)
-    print(f"Documento insertado con ID: {resultado.inserted_id}")
-except Exception as e:
-    print(f"Error al insertar documento: {e}")
+# 6. Confirmar cambios y cerrar conexión
+conn.commit()
+cur.close()
+conn.close()
+
+print("✔️ Dato insertado correctamente en PostgreSQL.")

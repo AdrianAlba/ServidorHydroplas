@@ -5,6 +5,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
 uri = "mongodb+srv://adrianalba:tukIweCey0ZrOih9@hydroplastdb.rxpa4k9.mongodb.net/?retryWrites=true&w=majority&appName=hydroplastDB"
+
 # Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
 # Send a ping to confirm a successful connection
@@ -83,7 +84,7 @@ async def main():
     except Exception as e:
         print(f"Error al insertar documento: {e}")
     
-    
+
 
     puerto = int(os.environ.get("PORT", 10000))
     async with websockets.serve(handler, "0.0.0.0", puerto):

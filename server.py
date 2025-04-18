@@ -36,9 +36,8 @@ async def handler(websocket):
                 # ✅ Enviar confirmación al clienteWeb
                 ws_web = buscar_cliente_por_nombre("clienteWeb")
                 if ws_web:
-                    confirmacion = f"echo: {mensaje}"
-                    await ws_web.send(confirmacion)
-                    print(f"✅ Confirmación enviada a clienteWeb: {confirmacion}")
+                    await ws_web.send(mensaje)
+                    print(f"✅ Confirmación enviada a clienteWeb: {mensaje}")
                 else:
                     await websocket.send("⚠️ clienteWeb no está conectado")
 

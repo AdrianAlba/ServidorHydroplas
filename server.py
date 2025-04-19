@@ -93,10 +93,9 @@ async def ws_handler(request):
     await ws.prepare(request)
 
     print("🔌 Cliente conectado por WebSocket")
-    nombre = "desconocido" # Inicializar nombre
     try:
         nombre = await ws.receive_str()
-        clientes_por_nombre[nombre] = ws
+        clientes_por_nombre[nombre] = ws  # Guardar por nombre
         print(f"👤 Cliente identificado como: {nombre}")
 
         async for msg in ws:
@@ -105,8 +104,8 @@ async def ws_handler(request):
                 print(f"📨 Mensaje de {nombre}: {mensaje}")
 
                 if nombre == "clienteWeb":
-                    hydroplast_ws = clientes_por_nombre.get("hydroplast")
-                    if hydroplast_ws:
+                    if "hydroplast" in clientes_por_nombre:
+                        hydroplast_ws = clientes_por_nombre["hydroplast"]
                         await hydroplast_ws.send_str(mensaje)
                         print(f"➡️ Reenviado a hydroplast: {mensaje}")
                     else:
@@ -117,35 +116,22 @@ async def ws_handler(request):
                         datos = json.loads(mensaje)
                         if await guardar_datos_sensor(datos):
                             print("✅ Datos guardados en PostgreSQL")
-
-                        # Reenviar datos formateados correctamente para la web si está conectada
-                        client_web_ws = clientes_por_nombre.get("clienteWeb")
-                        if client_web_ws:
-                            # Crear un diccionario con las claves que espera el frontend
-                            datos_para_web = {
-                                'timestamp': datos["timestamp"],
-                                'temperatura': datos["temperatura"],
-                                'iluminancia': datos["iluminancia"],
-                                'nivelAgua': datos.get("nivelAgua", datos.get("nivel_agua")),
-                                'ledRojo': datos.get("ledRojo", datos.get("led_rojo")),
-                                'ledAzul': datos.get("ledAzul", datos.get("led_azul")),
-                                'bombaAgua': datos.get("bombaAgua", datos.get("bomba_agua"))
-                            }
-                            await client_web_ws.send_str(json.dumps(datos_para_web))
+                        if "clienteWeb" in clientes_por_nombre:
+                            client_web_ws = clientes_por_nombre["clienteWeb"]
+                            await client_web_ws.send_str(mensaje)
                             print(f"✅ Datos reenviados a clienteWeb")
                         else:
-                            # No enviar mensaje de error a hydroplast, podría confundir al ESP32/Arduino
-                            print("⚠️ clienteWeb no está conectado para reenviar datos")
-
+                            await ws.send_str("⚠️ clienteWeb no está conectado")
                     except json.JSONDecodeError:
                         print("❌ Error: Mensaje no es JSON válido")
-                        # No enviar mensaje de error a hydroplast
+                        await ws.send_str("❌ Error: Formato JSON inválido")
                     except Exception as e:
-                        print(f"❌ Error procesando mensaje de hydroplast: {e}")
-                        # No enviar mensaje de error a hydroplast
+                        print(f"❌ Error procesando mensaje: {e}")
+                        await ws.send_str("❌ Error procesando datos")
             elif msg.type == web.WSMsgType.ERROR:
                 print(f'ws connection closed with exception {ws.exception()}')
     finally:
+        # Eliminar de la estructura correcta
         if nombre in clientes_por_nombre and clientes_por_nombre[nombre] == ws:
             del clientes_por_nombre[nombre]
         print(f"❌ Cliente {nombre} desconectado")

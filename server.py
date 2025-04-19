@@ -4,6 +4,7 @@ import json
 from aiohttp import web
 import psycopg2
 from datetime import datetime
+from aiohttp_cors import setup as cors_setup, ResourceOptions, CorsViewMixin
 
 # Conexión a PostgreSQL
 conn = psycopg2.connect(
@@ -28,14 +29,7 @@ CREATE TABLE IF NOT EXISTS mediciones (
 );
 """)
 
-clientes_conectados = {}  # websocket -> nombre
 clientes_por_nombre = {}  # nombre -> websocket
-
-def buscar_cliente_por_nombre(nombre):
-    for ws, cliente in clientes_conectados.items():
-        if cliente == nombre:
-            return ws
-    return None
 
 async def guardar_datos_sensor(datos):
     try:
@@ -130,13 +124,25 @@ async def ws_handler(request):
             del clientes_por_nombre[nombre]
         print(f"❌ Cliente {nombre} desconectado")
     return ws
+
 # --- Main app setup ---
 app = web.Application()
+
+# Configurar CORS - Método 1 (Simple)
+@web.middleware
+async def cors_middleware(request, handler):
+    response = await handler(request)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+app.middlewares.append(cors_middleware)
+
+# Agregar rutas
 app.router.add_get('/ws', ws_handler)  # WebSocket endpoint
 app.router.add_get('/api/last-reading', get_last_reading)  # HTTP endpoint
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     web.run_app(app, host="0.0.0.0", port=port)
-
-

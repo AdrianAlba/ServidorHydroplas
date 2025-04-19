@@ -1,6 +1,7 @@
 import asyncio
 import os
 import websockets
+import json
 
 import psycopg2
 from datetime import datetime
@@ -38,6 +39,26 @@ def buscar_cliente_por_nombre(nombre):
             return ws
     return None
 
+async def guardar_datos_sensor(datos):
+    try:
+        cur.execute("""
+            INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            datetime.fromisoformat(datos["timestamp"].replace('Z', '+00:00')),
+            datos["temperatura"],
+            datos["iluminancia"],
+            datos["nivelAgua"],
+            datos["ledRojo"],
+            datos["ledAzul"],
+            datos["bombaAgua"]
+        ))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ Error guardando datos: {e}")
+        return False
+
 async def handler(websocket):
     print("🔌 Cliente conectado")
     
@@ -60,13 +81,28 @@ async def handler(websocket):
                     await websocket.send("⚠️ hydroplast no está conectado")
 
             elif nombre == "hydroplast":
-                # ✅ Enviar confirmación al clienteWeb
-                ws_web = buscar_cliente_por_nombre("clienteWeb")
-                if ws_web:
-                    await ws_web.send(mensaje)
-                    print(f"✅ Confirmación enviada a clienteWeb: {mensaje}")
-                else:
-                    await websocket.send("⚠️ clienteWeb no está conectado")
+                try:
+                    # Convertir mensaje a JSON
+                    datos = json.loads(mensaje)
+                    
+                    # Guardar en base de datos
+                    if await guardar_datos_sensor(datos):
+                        print("✅ Datos guardados en PostgreSQL")
+                    
+                    # Enviar a clienteWeb
+                    ws_web = buscar_cliente_por_nombre("clienteWeb")
+                    if ws_web:
+                        await ws_web.send(mensaje)
+                        print(f"✅ Datos reenviados a clienteWeb")
+                    else:
+                        await websocket.send("⚠️ clienteWeb no está conectado")
+                
+                except json.JSONDecodeError:
+                    print("❌ Error: Mensaje no es JSON válido")
+                    await websocket.send("❌ Error: Formato JSON inválido")
+                except Exception as e:
+                    print(f"❌ Error procesando mensaje: {e}")
+                    await websocket.send("❌ Error procesando datos")
 
     except websockets.exceptions.ConnectionClosed:
         print(f"❌ Cliente {clientes_conectados.get(websocket, 'desconocido')} desconectado")
@@ -74,44 +110,10 @@ async def handler(websocket):
         clientes_conectados.pop(websocket, None)
 
 async def main():
-    datos_sensor = {
-        "timestamp": "2025-04-18T15:42:10Z",
-        "temperatura": 69.87,
-        "iluminancia": 69.35,
-        "nivelAgua": 78.20,
-        "ledRojo": 128,
-        "ledAzul": 255,
-        "bombaAgua": 200
-    }
-    
-    cur.execute("""
-        INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            datetime.fromisoformat(datos_sensor["timestamp"].replace('Z', '+00:00')),
-            datos_sensor["temperatura"],
-            datos_sensor["iluminancia"],
-            datos_sensor["nivelAgua"],
-            datos_sensor["ledRojo"],
-            datos_sensor["ledAzul"],
-            datos_sensor["bombaAgua"]
-    ))
-
-    # 6. Confirmar cambios y cerrar conexión
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    print("✔️ Dato insertado correctamente en PostgreSQL.")
-
-
     puerto = int(os.environ.get("PORT", 10000))
     async with websockets.serve(handler, "0.0.0.0", puerto):
         print(f"🌐 Servidor WebSocket escuchando en puerto {puerto}")
         await asyncio.Future()
 
 if __name__ == "__main__":
-
-
-
     asyncio.run(main())

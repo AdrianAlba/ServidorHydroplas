@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS mediciones (
 """)
 
 clientes_conectados = {}  # websocket -> nombre
+clientes_por_nombre = {}  # nombre -> websocket
 
 def buscar_cliente_por_nombre(nombre):
     for ws, cliente in clientes_conectados.items():
@@ -88,7 +89,7 @@ async def ws_handler(request):
     print("🔌 Cliente conectado por WebSocket")
     try:
         nombre = await ws.receive_str()
-        clientes_conectados[ws] = nombre
+        clientes_por_nombre[nombre] = ws  # Guardar por nombre
         print(f"👤 Cliente identificado como: {nombre}")
 
         async for msg in ws:
@@ -97,9 +98,9 @@ async def ws_handler(request):
                 print(f"📨 Mensaje de {nombre}: {mensaje}")
 
                 if nombre == "clienteWeb":
-                    ws_hydro = buscar_cliente_por_nombre("hydroplast")
-                    if ws_hydro:
-                        await ws_hydro.send_str(mensaje)
+                    if "hydroplast" in clientes_por_nombre:
+                        hydroplast_ws = clientes_por_nombre["hydroplast"]
+                        await hydroplast_ws.send_str(mensaje)
                         print(f"➡️ Reenviado a hydroplast: {mensaje}")
                     else:
                         await ws.send_str("⚠️ hydroplast no está conectado")
@@ -109,9 +110,9 @@ async def ws_handler(request):
                         datos = json.loads(mensaje)
                         if await guardar_datos_sensor(datos):
                             print("✅ Datos guardados en PostgreSQL")
-                        ws_web = buscar_cliente_por_nombre("clienteWeb")
-                        if ws_web:
-                            await ws_web.send_str(mensaje)
+                        if "clienteWeb" in clientes_por_nombre:
+                            client_web_ws = clientes_por_nombre["clienteWeb"]
+                            await client_web_ws.send_str(mensaje)
                             print(f"✅ Datos reenviados a clienteWeb")
                         else:
                             await ws.send_str("⚠️ clienteWeb no está conectado")
@@ -124,10 +125,11 @@ async def ws_handler(request):
             elif msg.type == web.WSMsgType.ERROR:
                 print(f'ws connection closed with exception {ws.exception()}')
     finally:
-        clientes_conectados.pop(ws, None)
-        print("❌ Cliente desconectado")
+        # Eliminar de la estructura correcta
+        if nombre in clientes_por_nombre and clientes_por_nombre[nombre] == ws:
+            del clientes_por_nombre[nombre]
+        print(f"❌ Cliente {nombre} desconectado")
     return ws
-
 # --- Main app setup ---
 app = web.Application()
 app.router.add_get('/ws', ws_handler)  # WebSocket endpoint

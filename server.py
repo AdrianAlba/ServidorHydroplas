@@ -82,7 +82,7 @@ async def get_last_reading(request):
 
 # --- WebSocket handler ---
 async def ws_handler(request):
-    ws = web.WebSocketResponse()
+    ws = web.WebSocketResponse(protocols=["arduino"])
     await ws.prepare(request)
 
     print("🔌 Cliente conectado por WebSocket")
@@ -136,3 +136,5 @@ app.router.add_get('/api/last-reading', get_last_reading)  # HTTP endpoint
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     web.run_app(app, host="0.0.0.0", port=port)
+
+

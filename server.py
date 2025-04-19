@@ -1,11 +1,11 @@
 import asyncio
 import os
-import websockets
 import json
-
+from aiohttp import web
 import psycopg2
 from datetime import datetime
 
+# Conexión a PostgreSQL
 conn = psycopg2.connect(
     host="virginia-postgres.render.com",
     database="hydroplastdb",
@@ -13,7 +13,6 @@ conn = psycopg2.connect(
     password="nPLtrVhiuMDIO1KTIBtQmtSTfO4cJPK9",
     port=5432
 )
-
 cur = conn.cursor()
 
 cur.execute("""
@@ -29,10 +28,8 @@ CREATE TABLE IF NOT EXISTS mediciones (
 );
 """)
 
-
 clientes_conectados = {}  # websocket -> nombre
 
-# 🔎 Función auxiliar para encontrar el WebSocket de un cliente por nombre
 def buscar_cliente_por_nombre(nombre):
     for ws, cliente in clientes_conectados.items():
         if cliente == nombre:
@@ -59,61 +56,83 @@ async def guardar_datos_sensor(datos):
         print(f"❌ Error guardando datos: {e}")
         return False
 
-async def handler(websocket):
-    print("🔌 Cliente conectado")
-    
+# --- HTTP endpoints ---
+async def get_last_reading(request):
     try:
-        # Recibir el primer mensaje como nombre
-        nombre = await websocket.recv()
-        clientes_conectados[websocket] = nombre
+        cur.execute("""
+            SELECT * FROM mediciones 
+            ORDER BY timestamp DESC 
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row:
+            return web.json_response({
+                'timestamp': row[1].isoformat(),
+                'temperatura': row[2],
+                'iluminancia': row[3],
+                'nivel_agua': row[4],
+                'led_rojo': row[5],
+                'led_azul': row[6],
+                'bomba_agua': row[7]
+            })
+        return web.json_response({'error': 'No data found'}, status=404)
+    except Exception as e:
+        print(f"Error getting last reading: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+# --- WebSocket handler ---
+async def ws_handler(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    print("🔌 Cliente conectado por WebSocket")
+    try:
+        nombre = await ws.receive_str()
+        clientes_conectados[ws] = nombre
         print(f"👤 Cliente identificado como: {nombre}")
 
-        async for mensaje in websocket:
-            print(f"📨 Mensaje de {nombre}: {mensaje}")
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                mensaje = msg.data
+                print(f"📨 Mensaje de {nombre}: {mensaje}")
 
-            if nombre == "clienteWeb":
-                # 🔁 Redirigir mensaje a hydroplast
-                ws_hydro = buscar_cliente_por_nombre("hydroplast")
-                if ws_hydro:
-                    await ws_hydro.send(mensaje)
-                    print(f"➡️ Reenviado a hydroplast: {mensaje}")
-                else:
-                    await websocket.send("⚠️ hydroplast no está conectado")
-
-            elif nombre == "hydroplast":
-                try:
-                    # Convertir mensaje a JSON
-                    datos = json.loads(mensaje)
-                    
-                    # Guardar en base de datos
-                    if await guardar_datos_sensor(datos):
-                        print("✅ Datos guardados en PostgreSQL")
-                    
-                    # Enviar a clienteWeb
-                    ws_web = buscar_cliente_por_nombre("clienteWeb")
-                    if ws_web:
-                        await ws_web.send(mensaje)
-                        print(f"✅ Datos reenviados a clienteWeb")
+                if nombre == "clienteWeb":
+                    ws_hydro = buscar_cliente_por_nombre("hydroplast")
+                    if ws_hydro:
+                        await ws_hydro.send_str(mensaje)
+                        print(f"➡️ Reenviado a hydroplast: {mensaje}")
                     else:
-                        await websocket.send("⚠️ clienteWeb no está conectado")
-                
-                except json.JSONDecodeError:
-                    print("❌ Error: Mensaje no es JSON válido")
-                    await websocket.send("❌ Error: Formato JSON inválido")
-                except Exception as e:
-                    print(f"❌ Error procesando mensaje: {e}")
-                    await websocket.send("❌ Error procesando datos")
+                        await ws.send_str("⚠️ hydroplast no está conectado")
 
-    except websockets.exceptions.ConnectionClosed:
-        print(f"❌ Cliente {clientes_conectados.get(websocket, 'desconocido')} desconectado")
+                elif nombre == "hydroplast":
+                    try:
+                        datos = json.loads(mensaje)
+                        if await guardar_datos_sensor(datos):
+                            print("✅ Datos guardados en PostgreSQL")
+                        ws_web = buscar_cliente_por_nombre("clienteWeb")
+                        if ws_web:
+                            await ws_web.send_str(mensaje)
+                            print(f"✅ Datos reenviados a clienteWeb")
+                        else:
+                            await ws.send_str("⚠️ clienteWeb no está conectado")
+                    except json.JSONDecodeError:
+                        print("❌ Error: Mensaje no es JSON válido")
+                        await ws.send_str("❌ Error: Formato JSON inválido")
+                    except Exception as e:
+                        print(f"❌ Error procesando mensaje: {e}")
+                        await ws.send_str("❌ Error procesando datos")
+            elif msg.type == web.WSMsgType.ERROR:
+                print(f'ws connection closed with exception {ws.exception()}')
     finally:
-        clientes_conectados.pop(websocket, None)
+        clientes_conectados.pop(ws, None)
+        print("❌ Cliente desconectado")
+    return ws
 
-async def main():
-    puerto = int(os.environ.get("PORT", 10000))
-    async with websockets.serve(handler, "0.0.0.0", puerto):
-        print(f"🌐 Servidor WebSocket escuchando en puerto {puerto}")
-        await asyncio.Future()
+# --- Main app setup ---
+app = web.Application()
+app.router.add_get('/ws', ws_handler)  # WebSocket endpoint
+app.router.add_get('/api/last-reading', get_last_reading)  # HTTP endpoint
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    port = int(os.environ.get("PORT", 10000))
+    web.run_app(app, host="0.0.0.0", port=port)

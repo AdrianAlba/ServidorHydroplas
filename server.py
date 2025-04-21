@@ -4,7 +4,7 @@ import json
 from aiohttp import web
 import psycopg2
 from datetime import datetime
-import aiohttp_cors # <--- Importar aiohttp-cors
+import aiohttp_cors
 
 # ... (tu código de conexión a la DB y funciones existentes) ...
 conn = psycopg2.connect(
@@ -71,8 +71,6 @@ async def get_last_reading(request):
         """)
         row = cur.fetchone()
         if row:
-            # Asegúrate de que los nombres de las claves coincidan con lo que espera el frontend
-            # O ajusta el frontend para que coincida con esto
             return web.json_response({
                 'timestamp': row[0].isoformat(),
                 'temperatura': row[1],
@@ -86,6 +84,45 @@ async def get_last_reading(request):
     except Exception as e:
         print(f"Error getting last reading: {e}")
         return web.json_response({'error': str(e)}, status=500)
+
+async def get_history(request):
+    try:
+        # Obtener el parámetro 'limit' de la consulta, con valor predeterminado de 10
+        limit = int(request.query.get('limit', 10))
+        
+        # Limitar el máximo número de registros a devolver (por seguridad y rendimiento)
+        if limit > 100:
+            limit = 100
+            
+        cur.execute("""
+            SELECT timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua
+            FROM mediciones
+            ORDER BY timestamp DESC
+            LIMIT %s
+        """, (limit,))
+        
+        rows = cur.fetchall()
+        
+        if rows:
+            result = []
+            for row in rows:
+                result.append({
+                    'timestamp': row[0].isoformat(),
+                    'temperatura': row[1],
+                    'iluminancia': row[2],
+                    'nivel_agua': row[3],
+                    'led_rojo': row[4],
+                    'led_azul': row[5],
+                    'bomba_agua': row[6]
+                })
+            return web.json_response(result)
+        return web.json_response({'error': 'No data found'}, status=404)
+    except ValueError:
+        return web.json_response({'error': 'Invalid limit parameter'}, status=400)
+    except Exception as e:
+        print(f"Error getting history: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
 
 # --- WebSocket handler ---
 async def ws_handler(request):
@@ -158,6 +195,10 @@ app.router.add_get('/ws', ws_handler) # WebSocket no necesita CORS de esta maner
 # Registrar la ruta HTTP y envolverla con CORS
 resource = cors.add(app.router.add_resource("/api/last-reading"))
 cors.add(resource.add_route("GET", get_last_reading))
+
+history_resource = cors.add(app.router.add_resource("/api/history"))
+cors.add(history_resource.add_route("GET", get_history))
+
 
 if __name__ == "__main__":
     # Usar variable de entorno PORT o default a 10000 como ya tienes

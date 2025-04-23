@@ -123,6 +123,56 @@ async def get_history(request):
         print(f"Error getting history: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+async def get_data_by_date_range(request):
+    try:
+        # Obtener parámetros de la consulta
+        start_date = request.query.get('start_date')
+        end_date = request.query.get('end_date')
+        column = request.query.get('column', 'temperatura')  # Por defecto usamos temperatura
+        
+        # Validar parámetros
+        if not start_date or not end_date:
+            return web.json_response({
+                'error': 'Se requieren los parámetros start_date y end_date'
+            }, status=400)
+        
+        # Validar que la columna solicitada exista en la tabla
+        valid_columns = ['temperatura', 'iluminancia', 'nivel_agua', 'led_rojo', 'led_azul', 'bomba_agua']
+        if column not in valid_columns:
+            return web.json_response({
+                'error': f'Columna inválida. Opciones válidas: {", ".join(valid_columns)}'
+            }, status=400)
+        
+        # Formatear fechas con hora completa
+        start_datetime = f"{start_date} 00:00:00"
+        end_datetime = f"{end_date} 23:59:59"
+        
+        # Construir consulta SQL de forma segura
+        query = f"""
+            SELECT timestamp, {column}
+            FROM mediciones
+            WHERE timestamp BETWEEN %s AND %s
+            ORDER BY timestamp
+        """
+        
+        cur.execute(query, (start_datetime, end_datetime))
+        rows = cur.fetchall()
+        
+        if rows:
+            result = []
+            for row in rows:
+                result.append({
+                    'timestamp': row[0].isoformat(),
+                    column: row[1]
+                })
+            return web.json_response(result)
+        
+        return web.json_response([], status=200)  # Devuelve una lista vacía si no hay datos
+        
+    except Exception as e:
+        print(f"Error en get_data_by_date_range: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
 
 # --- WebSocket handler ---
 async def ws_handler(request):
@@ -198,6 +248,10 @@ cors.add(resource.add_route("GET", get_last_reading))
 
 history_resource = cors.add(app.router.add_resource("/api/history"))
 cors.add(history_resource.add_route("GET", get_history))
+
+# Añadir la nueva ruta a la aplicación
+date_range_resource = cors.add(app.router.add_resource("/api/data-by-date-range"))
+cors.add(date_range_resource.add_route("GET", get_data_by_date_range))
 
 
 if __name__ == "__main__":

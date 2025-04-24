@@ -23,14 +23,12 @@ CREATE TABLE IF NOT EXISTS mediciones (
     temperatura REAL,
     iluminancia REAL,
     nivel_agua REAL,
-    ledRojo INTEGER,
-    ledAzul INTEGER,
-    bombaAgua INTEGER,
-    particulasAgua INTEGER -- Añadimos la nueva columna
+    led_rojo INTEGER,
+    led_azul INTEGER,
+    bomba_agua INTEGER,
+    particulas_agua INTEGER
 );
 """)
-conn.commit()
-
 conn.commit() # Asegúrate de hacer commit después de crear la tabla
 
 clientes_conectados = {}
@@ -45,30 +43,30 @@ def buscar_cliente_por_nombre(nombre):
 async def guardar_datos_sensor(datos):
     try:
         cur.execute("""
-            INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, ledRojo, ledAzul, bombaAgua, particulasAgua)
+            INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua, particulas_agua)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             datetime.fromisoformat(datos["timestamp"].replace('Z', '+00:00')),
             datos["temperatura"],
             datos["iluminancia"],
-            datos.get("nivelAgua", datos.get("nivel_agua")),  # Aceptar ambas claves por si acaso
+            datos.get("nivelAgua", datos.get("nivel_agua")),
             datos.get("ledRojo", datos.get("led_rojo")),
             datos.get("ledAzul", datos.get("led_azul")),
             datos.get("bombaAgua", datos.get("bomba_agua")),
-            datos.get("particulasAgua", 0)  # Valor por defecto si no se proporciona
+            datos.get("particulasAgua", datos.get("particulas_agua", 0))  # Default a 0 si no existe
         ))
         conn.commit()
         return True
     except Exception as e:
         print(f"❌ Error guardando datos: {e}")
-        conn.rollback()  # Es buena práctica hacer rollback en caso de error
+        conn.rollback()
         return False
 
 # --- HTTP endpoints ---
 async def get_last_reading(request):
     try:
         cur.execute("""
-            SELECT timestamp, temperatura, iluminancia, nivel_agua, ledRojo, ledAzul, bombaAgua, particulasAgua
+            SELECT timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua, particulas_agua
             FROM mediciones
             ORDER BY timestamp DESC
             LIMIT 1
@@ -79,11 +77,11 @@ async def get_last_reading(request):
                 'timestamp': row[0].isoformat(),
                 'temperatura': row[1],
                 'iluminancia': row[2],
-                'nivel_agua': row[3],  # Nota: frontend espera nivelAgua
-                'ledRojo': row[4],     # Nota: frontend espera ledRojo
-                'ledAzul': row[5],     # Nota: frontend espera ledAzul
-                'bombaAgua': row[6],   # Nota: frontend espera bombaAgua
-                'particulasAgua': row[7]  # Nueva columna
+                'nivelAgua': row[3],
+                'ledRojo': row[4],
+                'ledAzul': row[5],
+                'bombaAgua': row[6],
+                'particulasAgua': row[7]
             })
         return web.json_response({'error': 'No data found'}, status=404)
     except Exception as e:
@@ -93,12 +91,11 @@ async def get_last_reading(request):
 async def get_history(request):
     try:
         limit = int(request.query.get('limit', 10))
-        
         if limit > 100:
             limit = 100
-        
+            
         cur.execute("""
-            SELECT timestamp, temperatura, iluminancia, nivel_agua, ledRojo, ledAzul, bombaAgua, particulasAgua
+            SELECT timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua, particulas_agua
             FROM mediciones
             ORDER BY timestamp DESC
             LIMIT %s
@@ -113,11 +110,11 @@ async def get_history(request):
                     'timestamp': row[0].isoformat(),
                     'temperatura': row[1],
                     'iluminancia': row[2],
-                    'nivel_agua': row[3],
+                    'nivelAgua': row[3],
                     'ledRojo': row[4],
                     'ledAzul': row[5],
                     'bombaAgua': row[6],
-                    'particulasAgua': row[7]  # Nueva columna
+                    'particulasAgua': row[7]
                 })
             return web.json_response(result)
         return web.json_response({'error': 'No data found'}, status=404)
@@ -141,7 +138,7 @@ async def get_data_by_date_range(request):
             }, status=400)
         
         # Validar que la columna solicitada exista en la tabla
-        valid_columns = ['temperatura', 'iluminancia', 'nivel_agua', 'ledRojo', 'ledAzul', 'bombaAgua', 'particulasAgua']
+        valid_columns = ['temperatura', 'iluminancia', 'nivel_agua', 'led_rojo', 'led_azul', 'bomba_agua']
         print(column);
         if column not in valid_columns:
             return web.json_response({
@@ -159,7 +156,6 @@ async def get_data_by_date_range(request):
             WHERE timestamp BETWEEN %s AND %s
             ORDER BY timestamp
         """
-
         
         cur.execute(query, (start_datetime, end_datetime))
         rows = cur.fetchall()

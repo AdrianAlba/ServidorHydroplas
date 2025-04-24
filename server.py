@@ -22,11 +22,11 @@ CREATE TABLE IF NOT EXISTS mediciones (
     timestamp TIMESTAMP,
     temperatura REAL,
     iluminancia REAL,
-    nivel_agua REAL,
-    led_rojo INTEGER,
-    led_azul INTEGER,
-    bomba_agua INTEGER,
-    particulas_agua INTEGER
+    nivelagua REAL,
+    ledrojo INTEGER,
+    ledazul INTEGER,
+    bombaagua INTEGER,
+    particulasagua INTEGER
 );
 """)
 conn.commit() # Asegúrate de hacer commit después de crear la tabla
@@ -43,17 +43,17 @@ def buscar_cliente_por_nombre(nombre):
 async def guardar_datos_sensor(datos):
     try:
         cur.execute("""
-            INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua, particulas_agua)
+            INSERT INTO mediciones (timestamp, temperatura, iluminancia, nivelagua, ledrojo, ledazul, bombaagua, particulasagua)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             datetime.fromisoformat(datos["timestamp"].replace('Z', '+00:00')),
             datos["temperatura"],
             datos["iluminancia"],
-            datos.get("nivelAgua", datos.get("nivel_agua")),
-            datos.get("ledRojo", datos.get("led_rojo")),
-            datos.get("ledAzul", datos.get("led_azul")),
-            datos.get("bombaAgua", datos.get("bomba_agua")),
-            datos.get("particulasAgua", datos.get("particulas_agua", 0))  # Default a 0 si no existe
+            datos.get("nivelAgua", datos.get("nivelagua")),
+            datos.get("ledRojo", datos.get("ledrojo")),
+            datos.get("ledAzul", datos.get("ledazul")),
+            datos.get("bombaAgua", datos.get("bombaagua")),
+            datos.get("particulasAgua", datos.get("particulasagua", 0))  # Default a 0 si no existe
         ))
         conn.commit()
         return True
@@ -66,7 +66,7 @@ async def guardar_datos_sensor(datos):
 async def get_last_reading(request):
     try:
         cur.execute("""
-            SELECT timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua, particulas_agua
+            SELECT timestamp, temperatura, iluminancia, nivelagua, ledrojo, ledazul, bombaagua, particulasagua
             FROM mediciones
             ORDER BY timestamp DESC
             LIMIT 1
@@ -95,7 +95,7 @@ async def get_history(request):
             limit = 100
             
         cur.execute("""
-            SELECT timestamp, temperatura, iluminancia, nivel_agua, led_rojo, led_azul, bomba_agua, particulas_agua
+            SELECT timestamp, temperatura, iluminancia, nivelagua, ledrojo, ledazul, bombaagua, particulasagua
             FROM mediciones
             ORDER BY timestamp DESC
             LIMIT %s

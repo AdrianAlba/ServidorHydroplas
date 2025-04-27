@@ -138,7 +138,7 @@ async def get_data_by_date_range(request):
             }, status=400)
         
         # Validar que la columna solicitada exista en la tabla
-        valid_columns = ['temperatura', 'iluminancia', 'nivel_agua', 'led_rojo', 'led_azul', 'bomba_agua']
+        valid_columns = ['temperatura', 'iluminancia', 'nivelAgua', 'ledRojo', 'ledAzul', 'bombaAgua','particulasAgua']
         print(column);
         if column not in valid_columns:
             return web.json_response({

@@ -4,9 +4,9 @@ from datetime import datetime
 # 1. Conexión a PostgreSQL
 conn = psycopg2.connect(
     host="virginia-postgres.render.com",
-    database="hydroplastdb",
-    user="hydroplastdb_user",
-    password="nPLtrVhiuMDIO1KTIBtQmtSTfO4cJPK9",
+    database="hydroplastdb_gv3z",
+    user="hydroplastdb_gv3z_user",
+    password="STKh0UAAMtUuPdzxnq2APPFG0yWbxuoS",
     port=5432
 )
 

@@ -9,9 +9,9 @@ import aiohttp_cors
 # ... (tu código de conexión a la DB y funciones existentes) ...
 conn = psycopg2.connect(
     host="virginia-postgres.render.com",
-    database="hydroplastdb",
-    user="hydroplastdb_user",
-    password="nPLtrVhiuMDIO1KTIBtQmtSTfO4cJPK9", # Considera usar variables de entorno para la contraseña
+    database="hydroplastdb_gv3z",
+    user="hydroplastdb_gv3z_user",
+    password="STKh0UAAMtUuPdzxnq2APPFG0yWbxuoS",
     port=5432
 )
 cur = conn.cursor()

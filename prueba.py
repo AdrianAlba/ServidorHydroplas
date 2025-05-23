@@ -10,6 +10,7 @@ conn = psycopg2.connect(
     port=5432
 )
 
+
 # 2. Crear cursor
 cur = conn.cursor()
 

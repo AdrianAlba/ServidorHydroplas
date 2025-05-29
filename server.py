@@ -33,6 +33,7 @@ conn.commit() # Asegúrate de hacer commit después de crear la tabla
 
 clientes_conectados = {}
 clientes_por_nombre = {}
+last_db_write_time = None # Variable to track the last DB write time
 
 def buscar_cliente_por_nombre(nombre):
     for ws, cliente in clientes_conectados.items():
@@ -201,22 +202,38 @@ async def ws_handler(request):
                         await ws.send_str("⚠️ hydroplast no está conectado")
 
                 elif nombre == "hydroplast":
+                    global last_db_write_time # Use the global variable
                     try:
-                        datos = json.loads(mensaje)
-                        if await guardar_datos_sensor(datos):
-                            print("✅ Datos guardados en PostgreSQL")
+                        datos = json.loads(mensaje) # Parse message to 'datos' dict
+
+                        # Always forward the raw message to other clients
                         if "clienteWeb" in clientes_por_nombre:
                             client_web_ws = clientes_por_nombre["clienteWeb"]
-                            await client_web_ws.send_str(mensaje)
+                            await client_web_ws.send_str(mensaje) # Forward original JSON string
                             print(f"✅ Datos reenviados a clienteWeb")
-                        # Add logic for hydroplastDisplay
+                        
                         if "hydroplastDisplay" in clientes_por_nombre:
                             hydroplast_display_ws = clientes_por_nombre["hydroplastDisplay"]
-                            await hydroplast_display_ws.send_str(mensaje)
+                            await hydroplast_display_ws.send_str(mensaje) # Forward original JSON string
                             print(f"✅ Datos reenviados a hydroplastDisplay")
-                        # Removed the 'else' that would send "clienteWeb no está conectado"
-                        # as we now check for each client type individually.
-                        # Consider if you want specific messages if one or the other is not connected.
+
+                        # Logic to save to DB every 5 seconds
+                        current_time = datetime.now()
+                        should_save_to_db = False
+
+                        if last_db_write_time is None or \
+                           (current_time - last_db_write_time).total_seconds() >= 5:
+                            should_save_to_db = True
+                        
+                        if should_save_to_db:
+                            if await guardar_datos_sensor(datos): # Use parsed 'datos' for saving
+                                print("✅ Datos guardados en PostgreSQL")
+                                last_db_write_time = current_time # Update last write time
+                            else:
+                                print("❌ Error al guardar datos en PostgreSQL")
+                        else:
+                            print("ℹ️ Datos de hydroplast recibidos, en espera del intervalo de 5s para guardar.")
+
                     except json.JSONDecodeError:
                         print("❌ Error: Mensaje no es JSON válido")
                         await ws.send_str("❌ Error: Formato JSON inválido")

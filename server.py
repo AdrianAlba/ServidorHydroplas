@@ -209,8 +209,14 @@ async def ws_handler(request):
                             client_web_ws = clientes_por_nombre["clienteWeb"]
                             await client_web_ws.send_str(mensaje)
                             print(f"✅ Datos reenviados a clienteWeb")
-                        else:
-                            await ws.send_str("⚠️ clienteWeb no está conectado")
+                        # Add logic for hydroplastDisplay
+                        if "hydroplastDisplay" in clientes_por_nombre:
+                            hydroplast_display_ws = clientes_por_nombre["hydroplastDisplay"]
+                            await hydroplast_display_ws.send_str(mensaje)
+                            print(f"✅ Datos reenviados a hydroplastDisplay")
+                        # Removed the 'else' that would send "clienteWeb no está conectado"
+                        # as we now check for each client type individually.
+                        # Consider if you want specific messages if one or the other is not connected.
                     except json.JSONDecodeError:
                         print("❌ Error: Mensaje no es JSON válido")
                         await ws.send_str("❌ Error: Formato JSON inválido")

@@ -201,6 +201,14 @@ async def ws_handler(request):
                     else:
                         await ws.send_str("⚠️ hydroplast no está conectado")
 
+                elif nombre == "hydroplastDisplay": # New condition for hydroplastDisplay
+                    if "hydroplast" in clientes_por_nombre:
+                        hydroplast_ws = clientes_por_nombre["hydroplast"]
+                        await hydroplast_ws.send_str(mensaje)
+                        print(f"➡️ Mensaje de hydroplastDisplay reenviado a hydroplast: {mensaje}")
+                    else:
+                        await ws.send_str("⚠️ hydroplast no está conectado para recibir el mensaje.")
+
                 elif nombre == "hydroplast":
                     global last_db_write_time # Use the global variable
                     try:
